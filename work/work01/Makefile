@@ -5,7 +5,7 @@
 #Universita' degli Studi di Milano
 
 #name of the file
-FILENAME = RainSnow
+FILENAME = work01
 
 # Xcode compiler
 CXX = clang++
@@ -35,5 +35,5 @@ all:
 
 .PHONY : clean
 clean :
-	-rm $(TARGET)
+	-rm $(TARGET) 
 	-rm -R $(TARGET).dSYM

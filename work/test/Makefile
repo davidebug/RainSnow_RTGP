@@ -1,11 +1,11 @@
 # Makefile for RTGP lab lecture exercises - MacOS environment
 # author: Davide Gadia
-#Real-Time Graphics Programming - a.a. 2020/2021
-#Master degree in Computer Science
-#Universita' degli Studi di Milano
+# Real-Time Graphics Programming - a.a. 2020/2021
+# Master degree in Computer Science
+# Universita' degli Studi di Milano
 
 #name of the file
-FILENAME = RainSnow
+FILENAME = test
 
 # Xcode compiler
 CXX = clang++

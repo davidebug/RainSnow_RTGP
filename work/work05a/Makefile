@@ -5,7 +5,7 @@
 #Universita' degli Studi di Milano
 
 #name of the file
-FILENAME = RainSnow
+FILENAME = work05a
 
 # Xcode compiler
 CXX = clang++

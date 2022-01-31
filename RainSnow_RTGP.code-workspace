@@ -1,0 +1,17 @@
+{
+	"folders": [
+		{
+			"name": "IncludeDir",
+			"path": "include"
+		},
+		{
+			"path": "bin\\bin"
+		}
+	],
+	"settings": {
+		"files.associations": {
+			"string": "cpp",
+			"iosfwd": "cpp"
+		}
+	}
+}
