@@ -441,6 +441,7 @@ void RenderObjects(Shader &shader, Model &planeModel, Model &cubeModel, Model &s
 
     // we render the sphere
     sphereModel.Draw();
+    
 
     glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_2D, textureID[1]);
