@@ -131,8 +131,6 @@ GLfloat lastFrame = 0.0f;
 GLfloat orientationY = 0.0f;
 // rotation speed on Y axis
 GLfloat spin_speed = 30.0f;
-// boolean to start/stop animated rotation on Y angle
-GLboolean spinning = GL_TRUE;
 
 // boolean to activate/deactivate wireframe rendering
 GLboolean wireframe = GL_FALSE;
@@ -236,7 +234,7 @@ int main()
     textureID.push_back(LoadTexture("../../textures/SoilCracked.png"));
 
     // we load the model(s) (code of Model class is in include/utils/model_v2.h)
-    Model cubeModel("../../models/cube.obj");
+    Model cubeModel("../../models/bench.obj");
     Model sphereModel("../../models/sphere.obj");
     Model bunnyModel("../../models/bunny_lp.obj");
     Model planeModel("../../models/plane.obj");
@@ -335,9 +333,7 @@ int main()
         else
             glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
-        // if animated rotation is activated, than we increment the rotation angle using delta time and the rotation speed parameter
-        if (spinning)
-            orientationY+=(deltaTime*spin_speed);
+        
 
         // we set the viewport for the final rendering step
         glViewport(0, 0, width, height);
@@ -446,13 +442,18 @@ void RenderObjects(Shader &shader, Model &planeModel, Model &cubeModel, Model &s
     // we render the sphere
     sphereModel.Draw();
 
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, textureID[1]);
+    glUniform1i(textureLocation, 1);
+    glUniform1f(repeatLocation, 80.0);
+
     // CUBE
     // we reset to identity at each frame
     cubeModelMatrix = glm::mat4(1.0f);
     cubeNormalMatrix = glm::mat3(1.0f);
-    cubeModelMatrix = glm::translate(cubeModelMatrix, glm::vec3(0.0f, 1.0f, 0.0f));
+    cubeModelMatrix = glm::translate(cubeModelMatrix, glm::vec3(0.0f, -1.0f, 0.0f));
     cubeModelMatrix = glm::rotate(cubeModelMatrix, glm::radians(orientationY), glm::vec3(0.0f, 1.0f, 0.0f));
-    cubeModelMatrix = glm::scale(cubeModelMatrix, glm::vec3(0.8f, 0.8f, 0.8f));
+    cubeModelMatrix = glm::scale(cubeModelMatrix, glm::vec3(0.01f, 0.01f, 0.01f));
     cubeNormalMatrix = glm::inverseTranspose(glm::mat3(view*cubeModelMatrix));
     glUniformMatrix4fv(glGetUniformLocation(shader.Program, "modelMatrix"), 1, GL_FALSE, glm::value_ptr(cubeModelMatrix));
     glUniformMatrix3fv(glGetUniformLocation(shader.Program, "normalMatrix"), 1, GL_FALSE, glm::value_ptr(cubeNormalMatrix));
@@ -589,10 +590,6 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
     // if ESC is pressed, we close the application
     if(key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
         glfwSetWindowShouldClose(window, GL_TRUE);
-
-    // if P is pressed, we start/stop the animated rotation of models
-    if(key == GLFW_KEY_P && action == GLFW_PRESS)
-        spinning=!spinning;
 
     // if L is pressed, we activate/deactivate wireframe rendering of models
     if(key == GLFW_KEY_L && action == GLFW_PRESS)
