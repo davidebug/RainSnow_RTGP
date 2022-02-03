@@ -110,7 +110,7 @@ void SetupShader(int shader_program);
 void PrintCurrentShader(int subroutine);
 
 // in this application, we have isolated the models rendering using a function, which will be called in each rendering step
-void RenderObjects(Shader &shader, Model &planeModel, Model &cubeModel, Model &sphereModel, Model &bunnyModel, GLint render_pass, GLuint depthMap);
+void RenderObjects(Shader &shader, Model &planeModel, Model &benchModel, Model &lampModel, Model &treeModel, GLint render_pass, GLuint depthMap);
 
 // load image from disk and create an OpenGL texture
 GLint LoadTexture(const char* path);
@@ -139,12 +139,12 @@ GLboolean wireframe = GL_FALSE;
 glm::mat4 view = glm::mat4(1.0f);
 
 // Model and Normal transformation matrices for the objects in the scene: we set to identity
-glm::mat4 sphereModelMatrix = glm::mat4(1.0f);
-glm::mat3 sphereNormalMatrix = glm::mat3(1.0f);
-glm::mat4 cubeModelMatrix = glm::mat4(1.0f);
-glm::mat3 cubeNormalMatrix = glm::mat3(1.0f);
-glm::mat4 bunnyModelMatrix = glm::mat4(1.0f);
-glm::mat3 bunnyNormalMatrix = glm::mat3(1.0f);
+glm::mat4 lampModelMatrix = glm::mat4(1.0f);
+glm::mat3 lampNormalMatrix = glm::mat3(1.0f);
+glm::mat4 benchModelMatrix = glm::mat4(1.0f);
+glm::mat3 benchNormalMatrix = glm::mat3(1.0f);
+glm::mat4 treeModelMatrix = glm::mat4(1.0f);
+glm::mat3 treeNormalMatrix = glm::mat3(1.0f);
 glm::mat4 planeModelMatrix = glm::mat4(1.0f);
 glm::mat3 planeNormalMatrix = glm::mat3(1.0f);
 
@@ -232,11 +232,14 @@ int main()
     // we load the images and store them in a vector
     textureID.push_back(LoadTexture("../../textures/UV_Grid_Sm.png"));
     textureID.push_back(LoadTexture("../../textures/SoilCracked.png"));
+    textureID.push_back(LoadTexture("../../textures/bark_0021.jpg"));
+    // textureID.push_back(LoadTexture("../../textures/DB2X2_L01_Nor.png"));
+    // textureID.push_back(LoadTexture("../../textures/DB2X2_L01.png"));
 
     // we load the model(s) (code of Model class is in include/utils/model_v2.h)
-    Model cubeModel("../../models/bench.obj");
-    Model sphereModel("../../models/sphere.obj");
-    Model bunnyModel("../../models/bunny_lp.obj");
+    Model benchModel("../../models/bench.obj");
+    Model lampModel("../../models/Lamp.obj");
+    Model treeModel("../../models/Tree.obj");
     Model planeModel("../../models/plane.obj");
 
     /////////////////// CREATION OF BUFFER FOR THE  DEPTH MAP /////////////////////////////////////////
@@ -313,7 +316,7 @@ int main()
         glClear(GL_DEPTH_BUFFER_BIT);
 
         // we render the scene, using the shadow shader
-        RenderObjects(shadow_shader, planeModel, cubeModel, sphereModel, bunnyModel, SHADOWMAP, depthMap);
+        RenderObjects(shadow_shader, planeModel, benchModel, lampModel, treeModel, SHADOWMAP, depthMap);
 
         /////////////////// STEP 2 - SCENE RENDERING FROM CAMERA ////////////////////////////////////////////////
 
@@ -363,7 +366,7 @@ int main()
         glUniform1f(f0Location, F0);
 
         // we render the scene
-        RenderObjects(illumination_shader, planeModel, cubeModel, sphereModel, bunnyModel, RENDER, depthMap);
+        RenderObjects(illumination_shader, planeModel, benchModel, lampModel, treeModel, RENDER, depthMap);
 
         // Swapping back and front buffers
         glfwSwapBuffers(window);
@@ -381,7 +384,7 @@ int main()
 
 //////////////////////////////////////////
 // we render the objects. We pass also the current rendering step, and the depth map generated in the first step, which is used by the shaders of the second step
-void RenderObjects(Shader &shader, Model &planeModel, Model &cubeModel, Model &sphereModel, Model &bunnyModel, GLint render_pass, GLuint depthMap)
+void RenderObjects(Shader &shader, Model &planeModel, Model &benchModel, Model &lampModel, Model &treeModel, GLint render_pass, GLuint depthMap)
 {
     // For the second rendering step -> we pass the shadow map to the shaders
     if (render_pass==RENDER)
@@ -422,7 +425,7 @@ void RenderObjects(Shader &shader, Model &planeModel, Model &cubeModel, Model &s
     // we render the plane
     planeModel.Draw();
 
-    // SPHERE
+    // lamp
     // we activate the texture of the object
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, textureID[0]);
@@ -430,51 +433,59 @@ void RenderObjects(Shader &shader, Model &planeModel, Model &cubeModel, Model &s
     glUniform1f(repeatLocation, repeat);
 
     // we reset to identity at each frame
-    sphereModelMatrix = glm::mat4(1.0f);
-    sphereNormalMatrix = glm::mat3(1.0f);
-    sphereModelMatrix = glm::translate(sphereModelMatrix, glm::vec3(-3.0f, 1.0f, 0.0f));
-    sphereModelMatrix = glm::rotate(sphereModelMatrix, glm::radians(orientationY), glm::vec3(0.0f, 1.0f, 0.0f));
-    sphereModelMatrix = glm::scale(sphereModelMatrix, glm::vec3(0.8f, 0.8f, 0.8f));
-    sphereNormalMatrix = glm::inverseTranspose(glm::mat3(view*sphereModelMatrix));
-    glUniformMatrix4fv(glGetUniformLocation(shader.Program, "modelMatrix"), 1, GL_FALSE, glm::value_ptr(sphereModelMatrix));
-    glUniformMatrix3fv(glGetUniformLocation(shader.Program, "normalMatrix"), 1, GL_FALSE, glm::value_ptr(sphereNormalMatrix));
+    lampModelMatrix = glm::mat4(1.0f);
+    lampNormalMatrix = glm::mat3(1.0f);
+    lampModelMatrix = glm::translate(lampModelMatrix, glm::vec3(-3.0f, -1.0f, 3.0f));
+    lampModelMatrix = glm::rotate(lampModelMatrix, glm::radians(orientationY), glm::vec3(0.0f, 1.0f, 0.0f));
+    lampModelMatrix = glm::scale(lampModelMatrix, glm::vec3(0.25f, 0.25f, 0.25f));
+    lampNormalMatrix = glm::inverseTranspose(glm::mat3(view*lampModelMatrix));
+    glUniformMatrix4fv(glGetUniformLocation(shader.Program, "modelMatrix"), 1, GL_FALSE, glm::value_ptr(lampModelMatrix));
+    glUniformMatrix3fv(glGetUniformLocation(shader.Program, "normalMatrix"), 1, GL_FALSE, glm::value_ptr(lampNormalMatrix));
 
-    // we render the sphere
-    sphereModel.Draw();
+    // we render the lamp
+    lampModel.Draw();
     
 
-    glActiveTexture(GL_TEXTURE1);
-    glBindTexture(GL_TEXTURE_2D, textureID[1]);
-    glUniform1i(textureLocation, 1);
-    glUniform1f(repeatLocation, 80.0);
+    // bench
 
-    // CUBE
+        
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, textureID[0]);
+    glUniform1i(textureLocation, 0);
+    glUniform1f(repeatLocation, repeat);
     // we reset to identity at each frame
-    cubeModelMatrix = glm::mat4(1.0f);
-    cubeNormalMatrix = glm::mat3(1.0f);
-    cubeModelMatrix = glm::translate(cubeModelMatrix, glm::vec3(0.0f, -1.0f, 0.0f));
-    cubeModelMatrix = glm::rotate(cubeModelMatrix, glm::radians(orientationY), glm::vec3(0.0f, 1.0f, 0.0f));
-    cubeModelMatrix = glm::scale(cubeModelMatrix, glm::vec3(0.01f, 0.01f, 0.01f));
-    cubeNormalMatrix = glm::inverseTranspose(glm::mat3(view*cubeModelMatrix));
-    glUniformMatrix4fv(glGetUniformLocation(shader.Program, "modelMatrix"), 1, GL_FALSE, glm::value_ptr(cubeModelMatrix));
-    glUniformMatrix3fv(glGetUniformLocation(shader.Program, "normalMatrix"), 1, GL_FALSE, glm::value_ptr(cubeNormalMatrix));
+    benchModelMatrix = glm::mat4(1.0f);
+    benchNormalMatrix = glm::mat3(1.0f);
+    benchModelMatrix = glm::translate(benchModelMatrix, glm::vec3(0.0f, -1.0f, 0.0f));
+    benchModelMatrix = glm::rotate(benchModelMatrix, glm::radians(orientationY), glm::vec3(0.0f, 1.0f, 0.0f));
+    benchModelMatrix = glm::scale(benchModelMatrix, glm::vec3(0.01f, 0.01f, 0.01f));
+    benchNormalMatrix = glm::inverseTranspose(glm::mat3(view*benchModelMatrix));
+    glUniformMatrix4fv(glGetUniformLocation(shader.Program, "modelMatrix"), 1, GL_FALSE, glm::value_ptr(benchModelMatrix));
+    glUniformMatrix3fv(glGetUniformLocation(shader.Program, "normalMatrix"), 1, GL_FALSE, glm::value_ptr(benchNormalMatrix));
 
-    // we render the cube
-    cubeModel.Draw();
+    // we render the bench
+    benchModel.Draw();
 
-    // BUNNY
+    // tree
+
+        
+    glActiveTexture(GL_TEXTURE3);
+    glBindTexture(GL_TEXTURE_2D, textureID[2]);
+    glUniform1i(textureLocation, 3);
+    glUniform1f(repeatLocation, repeat);
+
     // we reset to identity at each frame
-    bunnyModelMatrix = glm::mat4(1.0f);
-    bunnyNormalMatrix = glm::mat3(1.0f);
-    bunnyModelMatrix = glm::translate(bunnyModelMatrix, glm::vec3(3.0f, 1.0f, 0.0f));
-    bunnyModelMatrix = glm::rotate(bunnyModelMatrix, glm::radians(orientationY), glm::vec3(0.0f, 1.0f, 0.0f));
-    bunnyModelMatrix = glm::scale(bunnyModelMatrix, glm::vec3(0.3f, 0.3f, 0.3f));
-    bunnyNormalMatrix = glm::inverseTranspose(glm::mat3(view*bunnyModelMatrix));
-    glUniformMatrix4fv(glGetUniformLocation(shader.Program, "modelMatrix"), 1, GL_FALSE, glm::value_ptr(bunnyModelMatrix));
-    glUniformMatrix3fv(glGetUniformLocation(shader.Program, "normalMatrix"), 1, GL_FALSE, glm::value_ptr(bunnyNormalMatrix));
-
-    // we render the bunny
-    bunnyModel.Draw();
+    treeModelMatrix = glm::mat4(1.0f);
+    treeNormalMatrix = glm::mat3(1.0f);
+    treeModelMatrix = glm::translate(treeModelMatrix, glm::vec3(5.0f, -1.0f, 5.0f));
+    treeModelMatrix = glm::rotate(treeModelMatrix, glm::radians(orientationY), glm::vec3(0.0f, 1.0f, 0.0f));
+    treeModelMatrix = glm::scale(treeModelMatrix, glm::vec3(1.5f, 1.5f, 1.5f));
+    treeNormalMatrix = glm::inverseTranspose(glm::mat3(view*treeModelMatrix));
+    glUniformMatrix4fv(glGetUniformLocation(shader.Program, "modelMatrix"), 1, GL_FALSE, glm::value_ptr(treeModelMatrix));
+    glUniformMatrix3fv(glGetUniformLocation(shader.Program, "normalMatrix"), 1, GL_FALSE, glm::value_ptr(treeNormalMatrix));
+    
+    // we render the tree
+    treeModel.Draw();
 
 }
 
