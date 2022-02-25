@@ -11,7 +11,10 @@
 	"settings": {
 		"files.associations": {
 			"string": "cpp",
-			"iosfwd": "cpp"
-		}
+			"iosfwd": "cpp",
+			"atomic": "cpp",
+			"memory": "cpp"
+		},
+		"C_Cpp.errorSquiggles": "Enabled"
 	}
 }
