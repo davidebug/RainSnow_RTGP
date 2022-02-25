@@ -26,7 +26,7 @@ class Shader
 {
 public:
     GLuint Program;
-
+    bool particleEnabled = false;
     //////////////////////////////////////////
 
     //constructor
@@ -82,7 +82,15 @@ public:
         glCompileShader(fragment);
         // check compilation errors
         checkCompileErrors(fragment, "FRAGMENT");
-
+ 
+        if ( particleEnabled ) {
+            const char * outputNames[] = { "Position", "Velocity",
+            "StartTime" };
+            glTransformFeedbackVaryings(this->Program, 3, outputNames,
+            GL_SEPARATE_ATTRIBS);
+        }
+        
+        
         // Step 3: Shader Program creation
         this->Program = glCreateProgram();
         glAttachShader(this->Program, vertex);
@@ -104,6 +112,9 @@ public:
     // We delete the Shader Program when application closes
     void Delete() { glDeleteProgram(this->Program); }
 
+    void enableParticles(){
+        particleEnabled = true;
+    }
 private:
     //////////////////////////////////////////
 
@@ -131,4 +142,5 @@ private:
 			}
 		}
 	}
+
 };
