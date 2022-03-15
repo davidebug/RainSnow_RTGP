@@ -58,52 +58,6 @@ subroutine uniform shadow_map Shadow_Calculation;
 
 ////////////////////////////////////////////////////////////////////
 
-//////////////////////////////////////////
-// it applies a very basic shadow mapping. The final result is heavily aliased (with a lot of "shadow acne"), and the areas outside the light frustum are rendered as in shadow
-subroutine(shadow_map)
-float Shadow_Acne() // this name is the one which is detected by the SetupShaders() function in the main application, and the one used to swap subroutines
-{
-    // given the fragment position in light coordinates, we apply the perspective divide. Usually, perspective divide is applied in an automatic way to the coordinates saved in the gl_Position variable. In this case, the vertex position in light coordinates has been saved in a separate variable, so we need to do it manually
-    vec3 projCoords = posLightSpace.xyz / posLightSpace.w;
-    // after the perspective divide the values are in the range [-1,1]: we must convert them in [0,1]
-    projCoords = projCoords * 0.5 + 0.5;
-    // we sample the shadow map, considering the closer depth value from the point of view of the light
-    float closestDepth = texture(shadowMap, projCoords.xy).r;
-    // we get the depth of current fragment from light's perspective
-    float currentDepth = projCoords.z;
-
-    // Version 1: if the depth of the current fragment is greater than the depth in the shadow map, then the fragment is in shadow
-    // -> A LOT OF ALIASING/SHADOW ACNE
-    float shadow = currentDepth > closestDepth  ? 1.0 : 0.0;
-
-    return shadow;
-}
-//////////////////////////////////////////
-
-//////////////////////////////////////////
-// it applies an adaptive bias to the depth test, in order to eliminate the "shadow acne"
-subroutine(shadow_map)
-float Shadow_Bias() // this name is the one which is detected by the SetupShaders() function in the main application, and the one used to swap subroutines
-{
-    // given the fragment position in light coordinates, we apply the perspective divide. Usually, perspective divide is applied in an automatic way to the coordinates saved in the gl_Position variable. In this case, the vertex position in light coordinates has been saved in a separate variable, so we need to do it manually
-    vec3 projCoords = posLightSpace.xyz / posLightSpace.w;
-    // after the perspective divide the values are in the range [-1,1]: we must convert them in [0,1]
-    projCoords = projCoords * 0.5 + 0.5;
-    // we sample the shadow map, considering the closer depth value from the point of view of the light
-    float closestDepth = texture(shadowMap, projCoords.xy).r;
-    // we get the depth of current fragment from light's perspective
-    float currentDepth = projCoords.z;
-
-    // Version 2: we calculate an adaptive bias to apply to the currentDepth value, to avoid the shadow acne effect.
-    // the bias value is in the range [0.005,0.05]: the final value is calculated considering the angle between the normal and the direction of light
-    vec3 normal = normalize(vNormal);
-    float bias = max(0.05 * (1.0 - dot(normal, lightDir)), 0.005);
-
-    // if the depth (with bias) of the current fragment is greater than the depth in the shadow map, then the fragment is in shadow
-    float shadow = currentDepth - bias > closestDepth  ? 1.0 : 0.0;
-
-    return shadow;
-}
 
 //////////////////////////////////////////
 // it applies Percentage-Closer Filtering to smooth the shadow edged. Moreover, the rendering of the areas behind the far plane of the light frustum is corrected

@@ -1,6 +1,7 @@
-#version 400
+#version 410
 subroutine void RenderPassType();
 subroutine uniform RenderPassType RenderPass;
+
 layout (location = 0) in vec3 VertexPosition;
 layout (location = 1) in vec3 VertexVelocity;
 layout (location = 2) in float VertexStartTime;
@@ -18,31 +19,33 @@ uniform mat4 MVP;
 subroutine (RenderPassType)
 void update() {
     
-Position = VertexPosition;
-Velocity = VertexVelocity;
-StartTime = VertexStartTime;
-if( Time >= StartTime ) {
-float age = Time - StartTime;
-if( age >ParticleLifetime ) {
-// The particle is past its lifetime, recycle.
-Position = vec3(0.0);
-Velocity = VertexInitialVelocity;
-StartTime = Time;
-} else {
-// The particle is alive, update.
-Position += Velocity * H;
-Velocity += Accel * H;
+    Position = VertexPosition;
+    Velocity = VertexVelocity;
+    StartTime = VertexStartTime;
+    if( Time >= StartTime ) {
+    float age = Time - StartTime;
+    if( age >ParticleLifetime ) {
+        // The particle is past its lifetime, recycle.
+        Position = vec3(0.0);
+        Velocity = VertexInitialVelocity;
+        StartTime = Time;
+        } else {
+        // The particle is alive, update.
+        Position += Velocity * H;
+        Velocity += Accel * H;
+        }
+    }
 }
-}
-}
+
 subroutine (RenderPassType)
 void render() {
-float age = Time - VertexStartTime;
-Transp = 1.0 - age / ParticleLifetime;
-gl_Position = MVP * vec4(VertexPosition, 1.0);
+    float age = Time - VertexStartTime;
+    Transp = 1.0 - age / ParticleLifetime;
+    gl_Position = MVP * vec4(VertexPosition, 1.0);
 }
+
 void main()
 {
 // This will call either render() or update()
-RenderPass();
+    RenderPass();
 }

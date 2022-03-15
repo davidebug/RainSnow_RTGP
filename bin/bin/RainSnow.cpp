@@ -135,7 +135,7 @@ GLuint current_subroutine = 0;
 vector<std::string> shaders;
 
 // the name of the subroutines are searched in the shaders, and placed in the shaders vector (to allow shaders swapping)
-void SetupShader(int shader_program);
+void SetupShader(int shader_program, bool isParticleShader);
 
 // print on console the name of current shader subroutine
 void PrintCurrentShader(int subroutine);
@@ -148,6 +148,9 @@ GLint LoadTexture(const char* path);
 
 // we initialize an array of booleans for each keybord key
 bool keys[1024];
+
+void initBuffers();
+void renderParticles();
 
 // we need to store the previous mouse position to calculate the offset with the current frame
 GLfloat lastX, lastY;
@@ -198,13 +201,15 @@ vector<GLint> textureID;
 // UV repetitions
 GLfloat repeat = 1.0;
 
+GLuint posBuf[2], velBuf[2];
+GLuint particleArray[2];
+GLuint feedback[2], initVel, startTime[2];
+GLuint drawBuf, query;
 
-GLuint feedback[2]; // Transform feedback objects
-GLuint posBuf[2]; // Position buffers (A and B)
-GLuint velBuf[2]; // Velocity buffers (A and B)
-GLuint startTime[2];// Start time buffers (A and B)
-GLuint particleArray[2]; 
+int nParticles;
 
+float angle;
+float time, deltaT;
 /////////////////// MAIN function ///////////////////////
 int main()
 {
@@ -246,14 +251,6 @@ int main()
         return -1;
     }
 
-    posBuf[0] = 0.0f;
-    posBuf[1] = 0.0f;
-
-    velBuf[0] = glm::mix(1.25f,1.5f,50.0f);
-    velBuf[1] = glm::mix(1.25f,1.5f,50.0f);
-
-    startTime[0] = 0.0f;
-    startTime[1] = 0.0f;
     // we define the viewport dimensions
     int width, height;
     glfwGetFramebufferSize(window, &width, &height);
@@ -264,22 +261,8 @@ int main()
     //the "clear" color for the frame buffer
     glClearColor(0.26f, 0.46f, 0.98f, 1.0f);
 
-    //Buffer Allocation
-    // Setup the feedback objects
-    glGenTransformFeedbacks(2, feedback);
-    // Transform feedback 0
-    glBindTransformFeedback(GL_TRANSFORM_FEEDBACK, feedback[0]);
-    glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER,0,posBuf[0]);
-    glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER,1,velBuf[0]);
-    glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER,2,startTime[0]);
-    // Transform feedback 1
-    glBindTransformFeedback(GL_TRANSFORM_FEEDBACK, feedback[1]);
-    glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER,0,posBuf[1]);
-    glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER,1,velBuf[1]);
-    glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER,2,startTime[1]);
+    initBuffers();
 
-    // we create the Shader Program for the creation of the shadow map
-    Shader shadow_shader("19_shadowmap.vert", "20_shadowmap.frag");
     // we create the Shader Program used for objects (which presents different subroutines we can switch)
     Shader illumination_shader = Shader("21_ggx_tex_shadow.vert", "22_ggx_tex_shadow.frag");
 
@@ -288,8 +271,8 @@ int main()
 
     // we parse the Shader Program to search for the number and names of the subroutines.
     // the names are placed in the shaders vector
-    SetupShader(illumination_shader.Program);
-    SetupShader(particle_shader.Program);
+    SetupShader(illumination_shader.Program, false);
+    SetupShader(particle_shader.Program, true);
     // we print on console the name of the first subroutine used
     PrintCurrentShader(current_subroutine);
 
@@ -358,88 +341,9 @@ int main()
         // we apply FPS camera movements
         apply_camera_movements();
 
-        particle_shader.Use();
-        //UPDATE PASS
+   
 
-        GLuint updateIndex = glGetSubroutineIndex( particle_shader.Program,
-GL_VERTEX_SHADER,"update" );
-
-        glUniformSubroutinesuiv(GL_VERTEX_SHADER, 1, &updateIndex);
-
-        GLint texture = LoadTexture("../../textures/SoilCracked.png");
-        float timeValue = 50.0f;
-        float hValue = 0.0f;
-        float lifetime = 2.0f;
-        glm::vec3 accelValue = glm::vec3(0.0f, 1.0f, 0.0f); 
-
-        // we determine the position in the Shader Program of the uniform variables
-        GLint ParticleTex = glGetUniformLocation(particle_shader.Program, "ParticleTex");
-        GLint Time = glGetUniformLocation(particle_shader.Program, "Time");
-        GLint H = glGetUniformLocation(particle_shader.Program, "H");
-        GLint accel = glGetUniformLocation(particle_shader.Program, "Accel");
-        GLint ParticleLifetime = glGetUniformLocation(particle_shader.Program, "ParticleLifetime");
-
-        // we assign the value to the uniform variables
-        glUniform1i(ParticleTex, texture);
-        glUniform1f(Time, timeValue);
-        glUniform1f(H, hValue);
-        glUniform3fv(accel, 1, glm::value_ptr(accelValue));
-        glUniform1f(ParticleLifetime, lifetime);
-
-
-
-        // Disable rendering
-        glEnable(GL_RASTERIZER_DISCARD);
-        // Bind the feedback object for the buffers to be drawn next
-        glBindTransformFeedback(GL_TRANSFORM_FEEDBACK,
-        feedback[drawBuf]);
-
-
-        // Draw points from input buffer with transform feedback
-        glBeginTransformFeedback(GL_POINTS);
-        glBindVertexArray(particleArray[1-drawBuf]);
-        glDrawArrays(GL_POINTS, 0, 50);
-        glEndTransformFeedback();
-
-        // Enable rendering
-        glDisable(GL_RASTERIZER_DISCARD);
-        //////////// Render pass ///////////////
-          GLuint renderIndex = glGetSubroutineIndex( particle_shader.Program,
-GL_VERTEX_SHADER,"render" );
-        glUniformSubroutinesuiv(GL_VERTEX_SHADER, 1, &renderIndex);
-        glClear( GL_COLOR_BUFFER_BIT );
-                // Un-bind the feedback object.
-        glBindTransformFeedback(GL_TRANSFORM_FEEDBACK, 0);
-        // Draw the sprites from the feedback buffer
-        glBindVertexArray(particleArray[drawBuf]);
-        glDrawArrays(GL_POINTS, 0, 50);
-        // Swap buffers
-        drawBuf = 1 - drawBuf;
-
-        /////////////////// STEP 1 - SHADOW MAP: RENDERING OF SCENE FROM LIGHT POINT OF VIEW ////////////////////////////////////////////////
-        // we set view and projection matrix for the rendering using light as a camera
-        glm::mat4 lightProjection, lightView;
-        glm::mat4 lightSpaceMatrix;
-        GLfloat near_plane = -10.0f, far_plane = 10.0f;
-        GLfloat frustumSize = 5.0f;
-        // for a directional light, the projection is orthographic. For point lights, we should use a perspective projection
-        lightProjection = glm::ortho(-frustumSize, frustumSize, -frustumSize, frustumSize, near_plane, far_plane);
-        // the light is directional, so technically it has no position. We need a view matrix, so we consider a position on the the direction vector of the light
-        lightView = glm::lookAt(lightDir0, glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-        // transformation matrix for the light
-        lightSpaceMatrix = lightProjection * lightView;
-        /// We "install" the  Shader Program for the shadow mapping creation
-        shadow_shader.Use();
-        // we pass the transformation matrix as uniform
-        glUniformMatrix4fv(glGetUniformLocation(shadow_shader.Program, "lightSpaceMatrix"), 1, GL_FALSE, glm::value_ptr(lightSpaceMatrix));
-        // we set the viewport for the first rendering step = dimensions of the depth texture
-        glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
-        // we activate the FBO for the depth map rendering
-        glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
-        glClear(GL_DEPTH_BUFFER_BIT);
-
-        // we render the scene, using the shadow shader
-        RenderObjects(shadow_shader, planeModel, benchModel, lampModel, treeModel, SHADOWMAP, depthMap);
+   
 
         /////////////////// STEP 2 - SCENE RENDERING FROM CAMERA ////////////////////////////////////////////////
 
@@ -464,6 +368,11 @@ GL_VERTEX_SHADER,"render" );
         // we set the viewport for the final rendering step
         glViewport(0, 0, width, height);
 
+        
+        // ---  LOADING SHADERS ----- //
+
+            // ILLUMINATION SHADER //
+
         // We "install" the selected Shader Program as part of the current rendering process. We pass to the shader the light transformation matrix, and the depth map rendered in the first rendering step
         illumination_shader.Use();
          // we search inside the Shader Program the name of the subroutine currently selected, and we get the numerical index
@@ -474,7 +383,7 @@ GL_VERTEX_SHADER,"render" );
         // we pass projection and view matrices to the Shader Program
         glUniformMatrix4fv(glGetUniformLocation(illumination_shader.Program, "projectionMatrix"), 1, GL_FALSE, glm::value_ptr(projection));
         glUniformMatrix4fv(glGetUniformLocation(illumination_shader.Program, "viewMatrix"), 1, GL_FALSE, glm::value_ptr(view));
-        glUniformMatrix4fv(glGetUniformLocation(illumination_shader.Program, "lightSpaceMatrix"), 1, GL_FALSE, glm::value_ptr(lightSpaceMatrix));
+        //glUniformMatrix4fv(glGetUniformLocation(illumination_shader.Program, "lightSpaceMatrix"), 1, GL_FALSE, glm::value_ptr(lightSpaceMatrix));
 
         // we determine the position in the Shader Program of the uniform variables
         GLint lightDirLocation = glGetUniformLocation(illumination_shader.Program, "lightVector");
@@ -493,12 +402,31 @@ GL_VERTEX_SHADER,"render" );
 
         // Swapping back and front buffers
         glfwSwapBuffers(window);
+
+            // --- PARTICLE SHADER --- //
+        
+        particle_shader.Use();
+
+        renderParticles(particle_shader);
+
+        // glClear( GL_COLOR_BUFFER_BIT );
+        //         // Un-bind the feedback object.
+        // glBindTransformFeedback(GL_TRANSFORM_FEEDBACK, 0);
+        // // Draw the sprites from the feedback buffer
+        // glBindVertexArray(particleArray[drawBuf]);
+        // glDrawArrays(GL_POINTS, 0, 100);
+
+        //         // we render the scene
+        // RenderObjects(particle_shader, planeModel, benchModel, lampModel, treeModel, RENDER, depthMap);
+
+
+
     }
 
     // when I exit from the graphics loop, it is because the application is closing
     // we delete the Shader Programs
     illumination_shader.Delete();
-    shadow_shader.Delete();
+    particle_shader.Delete();
     // chiudo e cancello il contesto creato
     glfwTerminate();
     return 0;
@@ -652,7 +580,7 @@ GLint LoadTexture(const char* path)
 // The function parses the content of the Shader Program, searches for the Subroutine type names,
 // the subroutines implemented for each type, print the names of the subroutines on the terminal, and add the names of
 // the subroutines to the shaders vector, which is used for the shaders swapping
-void SetupShader(int program)
+void SetupShader(int program, bool isParticleShader)
 {
     int maxSub,maxSubU,countActiveSU;
     GLchar name[256];
@@ -665,33 +593,65 @@ void SetupShader(int program)
 
     // get the number of Subroutine uniforms (only for the Fragment shader, due to the nature of the exercise)
     // it is possible to add similar calls also for the Vertex shader
-    glGetProgramStageiv(program, GL_FRAGMENT_SHADER, GL_ACTIVE_SUBROUTINE_UNIFORMS, &countActiveSU);
+    if(! isParticleShader){
+        glGetProgramStageiv(program, GL_FRAGMENT_SHADER, GL_ACTIVE_SUBROUTINE_UNIFORMS, &countActiveSU);
 
     // print info for every Subroutine uniform
     for (int i = 0; i < countActiveSU; i++) {
 
-        // get the name of the Subroutine uniform (in this example, we have only one)
-        glGetActiveSubroutineUniformName(program, GL_FRAGMENT_SHADER, i, 256, &len, name);
-        // print index and name of the Subroutine uniform
-        std::cout << "Subroutine Uniform: " << i << " - name: " << name << std::endl;
+            // get the name of the Subroutine uniform (in this example, we have only one)
+            glGetActiveSubroutineUniformName(program, GL_FRAGMENT_SHADER, i, 256, &len, name);
+            // print index and name of the Subroutine uniform
+            std::cout << "Subroutine Uniform: " << i << " - name: " << name << std::endl;
 
-        // get the number of subroutines
-        glGetActiveSubroutineUniformiv(program, GL_FRAGMENT_SHADER, i, GL_NUM_COMPATIBLE_SUBROUTINES, &numCompS);
+            // get the number of subroutines
+            glGetActiveSubroutineUniformiv(program, GL_FRAGMENT_SHADER, i, GL_NUM_COMPATIBLE_SUBROUTINES, &numCompS);
 
-        // get the indices of the active subroutines info and write into the array s
-        int *s =  new int[numCompS];
-        glGetActiveSubroutineUniformiv(program, GL_FRAGMENT_SHADER, i, GL_COMPATIBLE_SUBROUTINES, s);
-        std::cout << "Compatible Subroutines:" << std::endl;
+            // get the indices of the active subroutines info and write into the array s
+            int *s =  new int[numCompS];
+            glGetActiveSubroutineUniformiv(program, GL_FRAGMENT_SHADER, i, GL_COMPATIBLE_SUBROUTINES, s);
+            std::cout << "Compatible Subroutines:" << std::endl;
 
-        // for each index, get the name of the subroutines, print info, and save the name in the shaders vector
-        for (int j=0; j < numCompS; ++j) {
-            glGetActiveSubroutineName(program, GL_FRAGMENT_SHADER, s[j], 256, &len, name);
-            std::cout << "\t" << s[j] << " - " << name << "\n";
-            shaders.push_back(name);
+            // for each index, get the name of the subroutines, print info, and save the name in the shaders vector
+            for (int j=0; j < numCompS; ++j) {
+                glGetActiveSubroutineName(program, GL_FRAGMENT_SHADER, s[j], 256, &len, name);
+                std::cout << "\t" << s[j] << " - " << name << "\n";
+                shaders.push_back(name);
+            }
+            std::cout << std::endl;
+
+            delete[] s;
         }
-        std::cout << std::endl;
+    }
+    else{
+        glGetProgramStageiv(program, GL_VERTEX_SHADER, GL_ACTIVE_SUBROUTINE_UNIFORMS, &countActiveSU);
 
-        delete[] s;
+    // print info for every Subroutine uniform
+    for (int i = 0; i < countActiveSU; i++) {
+
+            // get the name of the Subroutine uniform (in this example, we have only one)
+            glGetActiveSubroutineUniformName(program, GL_VERTEX_SHADER, i, 256, &len, name);
+            // print index and name of the Subroutine uniform
+            std::cout << "Subroutine Uniform: " << i << " - name: " << name << std::endl;
+
+            // get the number of subroutines
+            glGetActiveSubroutineUniformiv(program, GL_VERTEX_SHADER, i, GL_NUM_COMPATIBLE_SUBROUTINES, &numCompS);
+
+            // get the indices of the active subroutines info and write into the array s
+            int *s =  new int[numCompS];
+            glGetActiveSubroutineUniformiv(program, GL_VERTEX_SHADER, i, GL_COMPATIBLE_SUBROUTINES, s);
+            std::cout << "Compatible Subroutines:" << std::endl;
+
+            // for each index, get the name of the subroutines, print info, and save the name in the shaders vector
+            for (int j=0; j < numCompS; ++j) {
+                glGetActiveSubroutineName(program, GL_VERTEX_SHADER, s[j], 256, &len, name);
+                std::cout << "\t" << s[j] << " - " << name << "\n";
+                shaders.push_back(name);
+            }
+            std::cout << std::endl;
+
+            delete[] s;
+        }
     }
 }
 
@@ -790,28 +750,6 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos)
 //---------------------------------------------------------------------------
 
 
-typedef struct {
-  // Life
-  bool alive;	// is the particle alive?
-  float life;	// particle lifespan
-  float fade; // decay
-  // color
-  float red;
-  float green;
-  float blue;
-  // Position/direction
-  float xpos;
-  float ypos;
-  float zpos;
-  // Velocity/Direction, only goes down in y dir
-  float vel;
-  // Gravity
-  float gravity;
-}particles;
-
-// Paticle System
-particles par_sys[MAX_PARTICLES];
-
 void normal_keys(unsigned char key, int x, int y) {
   if (key == 'r') { // Rain
     fall = RAIN;
@@ -846,258 +784,201 @@ void special_keys(int key, int x, int y) {
 
 }
 
+void initBuffers()
+{
+    nParticles = 4000;
 
-// Initialize/Reset Particles - give them their attributes
-void initParticles(int i) {
-    par_sys[i].alive = true;
-    par_sys[i].life = 1.0;
-    par_sys[i].fade = float(rand()%100)/1000.0f+0.003f;
+    // Generate the buffers
+    glGenBuffers(2, posBuf);    // position buffers
+    glGenBuffers(2, velBuf);    // velocity buffers
+    glGenBuffers(2, startTime); // Start time buffers
+    glGenBuffers(1, &initVel);  // Initial velocity buffer (never changes, only need one)
 
-    par_sys[i].xpos = (float) (rand() % 21) - 10;
-    par_sys[i].ypos = 10.0;
-    par_sys[i].zpos = (float) (rand() % 21) - 10;
+    // Allocate space for all buffers
+    int size = nParticles * 3 * sizeof(GLfloat);
+    glBindBuffer(GL_ARRAY_BUFFER, posBuf[0]);
+    glBufferData(GL_ARRAY_BUFFER, size, NULL, GL_DYNAMIC_COPY);
+    glBindBuffer(GL_ARRAY_BUFFER, posBuf[1]);
+    glBufferData(GL_ARRAY_BUFFER, size, NULL, GL_DYNAMIC_COPY);
+    glBindBuffer(GL_ARRAY_BUFFER, velBuf[0]);
+    glBufferData(GL_ARRAY_BUFFER, size, NULL, GL_DYNAMIC_COPY);
+    glBindBuffer(GL_ARRAY_BUFFER, velBuf[1]);
+    glBufferData(GL_ARRAY_BUFFER, size, NULL, GL_DYNAMIC_COPY);
+    glBindBuffer(GL_ARRAY_BUFFER, initVel);
+    glBufferData(GL_ARRAY_BUFFER, size, NULL, GL_STATIC_DRAW);
+    glBindBuffer(GL_ARRAY_BUFFER, startTime[0]);
+    glBufferData(GL_ARRAY_BUFFER, nParticles * sizeof(float), NULL, GL_DYNAMIC_COPY);
+    glBindBuffer(GL_ARRAY_BUFFER, startTime[1]);
+    glBufferData(GL_ARRAY_BUFFER, nParticles * sizeof(float), NULL, GL_DYNAMIC_COPY);
 
-    par_sys[i].red = 0.5;
-    par_sys[i].green = 0.5;
-    par_sys[i].blue = 1.0;
+    // Fill the first position buffer with zeroes
+    GLfloat *data = new GLfloat[nParticles * 3];
+    for( int i = 0; i < nParticles * 3; i++ ) data[i] = 0.0f;
+    glBindBuffer(GL_ARRAY_BUFFER, posBuf[0]);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, size, data);
 
-    par_sys[i].vel = velocity;
-    par_sys[i].gravity = -0.8;//-0.8;
+    // Fill the first velocity buffer with random velocities
+    glm::vec3 v(0.0f);
+    float velocity, theta, phi;
+    for( int i = 0; i < nParticles; i++ ) {
 
+		theta = glm::mix(0.0f, glm::pi<float>() / 6.0f, (float)rand() / RAND_MAX);
+		phi = glm::mix(0.0f, glm::two_pi<float>(), (float)rand() / RAND_MAX);
+
+        v.x = sinf(theta) * cosf(phi);
+        v.y = cosf(theta);
+        v.z = sinf(theta) * sinf(phi);
+
+        velocity = glm::mix(1.25f,1.5f,(float)rand() / RAND_MAX);
+        v = glm::normalize(v) * velocity;
+
+        data[3*i]   = v.x;
+        data[3*i+1] = v.y;
+        data[3*i+2] = v.z;
+    }
+    glBindBuffer(GL_ARRAY_BUFFER,velBuf[0]);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, size, data);
+    glBindBuffer(GL_ARRAY_BUFFER,initVel);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, size, data);
+
+    // Fill the first start time buffer
+    delete [] data;
+    data = new GLfloat[nParticles];
+    float time = 0.0f;
+    float rate = 0.001f;
+    for( int i = 0; i < nParticles; i++ ) {
+        data[i] = time;
+        time += rate;
+    }
+    glBindBuffer(GL_ARRAY_BUFFER,startTime[0]);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, nParticles * sizeof(float), data);
+
+    glBindBuffer(GL_ARRAY_BUFFER,0);
+    delete [] data;
+
+    // Create vertex arrays for each set of buffers
+    glGenVertexArrays(2, particleArray);
+
+    // Set up particle array 0
+    glBindVertexArray(particleArray[0]);
+    glBindBuffer(GL_ARRAY_BUFFER, posBuf[0]);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, NULL);
+    glEnableVertexAttribArray(0);
+
+    glBindBuffer(GL_ARRAY_BUFFER, velBuf[0]);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, NULL);
+    glEnableVertexAttribArray(1);
+
+    glBindBuffer(GL_ARRAY_BUFFER, startTime[0]);
+    glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE, 0, NULL);
+    glEnableVertexAttribArray(2);
+
+    glBindBuffer(GL_ARRAY_BUFFER, initVel);
+    glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, 0, NULL);
+    glEnableVertexAttribArray(3);
+
+    // Set up particle array 1
+    glBindVertexArray(particleArray[1]);
+    glBindBuffer(GL_ARRAY_BUFFER, posBuf[1]);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, NULL);
+    glEnableVertexAttribArray(0);
+
+    glBindBuffer(GL_ARRAY_BUFFER, velBuf[1]);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, NULL);
+    glEnableVertexAttribArray(1);
+
+    glBindBuffer(GL_ARRAY_BUFFER, startTime[1]);
+    glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE, 0, NULL);
+    glEnableVertexAttribArray(2);
+
+    glBindBuffer(GL_ARRAY_BUFFER, initVel);
+    glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, 0, NULL);
+    glEnableVertexAttribArray(3);
+
+    glBindVertexArray(0);
+
+    // Setup the feedback objects
+    glGenTransformFeedbacks(2, feedback);
+
+    // Transform feedback 0
+    glBindTransformFeedback(GL_TRANSFORM_FEEDBACK, feedback[0]);
+    glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER, 0, posBuf[0]);
+    glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER, 1, velBuf[0]);
+    glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER, 2, startTime[0]);
+
+    // Transform feedback 1
+    glBindTransformFeedback(GL_TRANSFORM_FEEDBACK, feedback[1]);
+    glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER, 0, posBuf[1]);
+    glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER, 1, velBuf[1]);
+    glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER, 2, startTime[1]);
+
+    glBindTransformFeedback(GL_TRANSFORM_FEEDBACK, 0);
+
+    GLint value;
+    glGetIntegerv(GL_MAX_TRANSFORM_FEEDBACK_BUFFERS, &value);
+    printf("MAX_TRANSFORM_FEEDBACK_BUFFERS = %d\n", value);
 }
 
-// void init( ) {
-//   int x, z;
+void renderParticles(Shader& particle_shader)
+{
 
-//     glShadeModel(GL_SMOOTH);
-//     glClearColor(0.0, 0.0, 0.0, 0.0);
-//     glClearDepth(1.0);
-//     glEnable(GL_DEPTH_TEST);
+     GLuint updateIndex = glGetSubroutineIndex( particle_shader.Program,
+    GL_VERTEX_SHADER,"update" );
 
-//   // Ground Verticies
-//     // Ground Colors
-//     for (z = 0; z < 21; z++) {
-//       for (x = 0; x < 21; x++) {
-//         ground_points[x][z][0] = x - 10.0;
-//         ground_points[x][z][1] = accum;
-//         ground_points[x][z][2] = z - 10.0;
+    glUniformSubroutinesuiv(GL_VERTEX_SHADER, 1, &updateIndex);
 
-//         ground_colors[z][x][0] = r; // red value
-//         ground_colors[z][x][1] = g; // green value
-//         ground_colors[z][x][2] = b; // blue value
-//         ground_colors[z][x][3] = 0.0; // acummulation factor
-//       }
-//     }
+    GLint texture = LoadTexture("../../textures/SoilCracked.png");
+    float timeValue = 50.0f;
+    float hValue = 0.0f;
+    float lifetime = 2.0f;
+    glm::vec3 accelValue = glm::vec3(0.0f, 1.0f, 0.0f); 
 
-//     // Initialize particles
-//     for (loop = 0; loop < MAX_PARTICLES; loop++) {
-//         initParticles(loop);
-//     }
-// }
+    // we determine the position in the Shader Program of the uniform variables
+    GLint ParticleTex = glGetUniformLocation(particle_shader.Program, "ParticleTex");
+    GLint Time = glGetUniformLocation(particle_shader.Program, "Time");
+    GLint H = glGetUniformLocation(particle_shader.Program, "H");
+    GLint accel = glGetUniformLocation(particle_shader.Program, "Accel");
+    GLint ParticleLifetime = glGetUniformLocation(particle_shader.Program, "ParticleLifetime");
 
-// // For Rain
-// void drawRain() {
-//   float x, y, z;
-//   for (loop = 0; loop < MAX_PARTICLES; loop=loop+2) {
-//     if (par_sys[loop].alive == true) {
-//       x = par_sys[loop].xpos;
-//       y = par_sys[loop].ypos;
-//       z = par_sys[loop].zpos + zoom;
+    // we assign the value to the uniform variables
+    glUniform1i(ParticleTex, texture);
+    glUniform1f(Time, timeValue);
+    glUniform1f(H, hValue);
+    glUniform3fv(accel, 1, glm::value_ptr(accelValue));
+    glUniform1f(ParticleLifetime, lifetime);
 
-//       // Draw particles
-//       glColor3f(0.5, 0.5, 1.0);
-//       glBegin(GL_LINES);
-//         glVertex3f(x, y, z);
-//         glVertex3f(x, y+0.5, z);
-//       glEnd();
+    glEnable(GL_RASTERIZER_DISCARD);
 
-//       // Update values
-//       //Move
-//       // Adjust slowdown for speed!
-//       par_sys[loop].ypos += par_sys[loop].vel / (slowdown*1000);
-//       par_sys[loop].vel += par_sys[loop].gravity;
-//       // Decay
-//       par_sys[loop].life -= par_sys[loop].fade;
+    glBindTransformFeedback(GL_TRANSFORM_FEEDBACK, feedback[drawBuf]);
 
-//       if (par_sys[loop].ypos <= -10) {
-//         par_sys[loop].life = -1.0;
-//       }
-//       //Revive
-//       if (par_sys[loop].life < 0.0) {
-//         initParticles(loop);
-//       }
-//     }
-//   }
-// }
+    glBeginTransformFeedback(GL_POINTS);
+      glBindVertexArray(particleArray[1-drawBuf]);
+      glDrawArrays(GL_POINTS, 0, nParticles);
+    glEndTransformFeedback();
 
-// // For Hail
-// void drawHail() {
-//   float x, y, z;
+    glDisable(GL_RASTERIZER_DISCARD);
 
-//   for (loop = 0; loop < MAX_PARTICLES; loop=loop+2) {
-//     if (par_sys[loop].alive == true) {
-//       x = par_sys[loop].xpos;
-//       y = par_sys[loop].ypos;
-//       z = par_sys[loop].zpos + zoom;
+    // Render pass
+     GLuint renderIndex = glGetSubroutineIndex( particle_shader.Program,
+GL_VERTEX_SHADER,"render" );
+        glUniformSubroutinesuiv(GL_VERTEX_SHADER, 1, &renderIndex);   
 
-//       // Draw particles
-//       glColor3f(0.8, 0.8, 0.9);
-//       glBegin(GL_QUADS);
-//         // Front
-//         glVertex3f(x-hailsize, y-hailsize, z+hailsize); // lower left
-//         glVertex3f(x-hailsize, y+hailsize, z+hailsize); // upper left
-//         glVertex3f(x+hailsize, y+hailsize, z+hailsize); // upper right
-//         glVertex3f(x+hailsize, y-hailsize, z+hailsize); // lower left
-//         //Left
-//         glVertex3f(x-hailsize, y-hailsize, z+hailsize);
-//         glVertex3f(x-hailsize, y-hailsize, z-hailsize);
-//         glVertex3f(x-hailsize, y+hailsize, z-hailsize);
-//         glVertex3f(x-hailsize, y+hailsize, z+hailsize);
-//         // Back
-//         glVertex3f(x-hailsize, y-hailsize, z-hailsize);
-//         glVertex3f(x-hailsize, y+hailsize, z-hailsize);
-//         glVertex3f(x+hailsize, y+hailsize, z-hailsize);
-//         glVertex3f(x+hailsize, y-hailsize, z-hailsize);
-//         //Right
-//         glVertex3f(x+hailsize, y+hailsize, z+hailsize);
-//         glVertex3f(x+hailsize, y+hailsize, z-hailsize);
-//         glVertex3f(x+hailsize, y-hailsize, z-hailsize);
-//         glVertex3f(x+hailsize, y-hailsize, z+hailsize);
-//         //Top
-//         glVertex3f(x-hailsize, y+hailsize, z+hailsize);
-//         glVertex3f(x-hailsize, y+hailsize, z-hailsize);
-//         glVertex3f(x+hailsize, y+hailsize, z-hailsize);
-//         glVertex3f(x+hailsize, y+hailsize, z+hailsize);
-//         //Bottom
-//         glVertex3f(x-hailsize, y-hailsize, z+hailsize);
-//         glVertex3f(x-hailsize, y-hailsize, z-hailsize);
-//         glVertex3f(x+hailsize, y-hailsize, z-hailsize);
-//         glVertex3f(x+hailsize, y-hailsize, z+hailsize);
-//       glEnd();
+        glClear( GL_COLOR_BUFFER_BIT );
+                // Un-bind the feedback object.
+        glBindTransformFeedback(GL_TRANSFORM_FEEDBACK, 0);
+        // Draw the sprites from the feedback buffer
+        glBindVertexArray(particleArray[drawBuf]);
+        glDrawArrays(GL_POINTS, 0, 100);
+    view = glm::lookAt(glm::vec3(3.0f * cos(angle),1.5f,3.0f * sin(angle)), glm::vec3(0.0f,1.5f,0.0f), glm::vec3(0.0f,1.0f,0.0f));
+    
+    
+   // setMatrices();
 
-//       // Update values
-//       //Move
-//       if (par_sys[loop].ypos <= -10) {
-//         par_sys[loop].vel = par_sys[loop].vel * -1.0;
-//       }
-//       par_sys[loop].ypos += par_sys[loop].vel / (slowdown*1000); // * 1000
-//       par_sys[loop].vel += par_sys[loop].gravity;
+    glBindVertexArray(particleArray[drawBuf]);
+    glDrawTransformFeedback(GL_POINTS, feedback[drawBuf]);
 
-//       // Decay
-//       par_sys[loop].life -= par_sys[loop].fade;
-
-//       //Revive
-//       if (par_sys[loop].life < 0.0) {
-//         initParticles(loop);
-//       }
-//     }
-//   }
-// }
-
-// // For Snow
-// void drawSnow() {
-//   float x, y, z;
-//   for (loop = 0; loop < MAX_PARTICLES; loop=loop+2) {
-//     if (par_sys[loop].alive == true) {
-//       x = par_sys[loop].xpos;
-//       y = par_sys[loop].ypos;
-//       z = par_sys[loop].zpos + zoom;
-
-//       // Draw particles
-//       glColor3f(1.0, 1.0, 1.0);
-//       glPushMatrix();
-//       glTranslatef(x, y, z);
-//    //   glutSolidSphere(0.2, 16, 16);
-//       glPopMatrix();
-
-//       // Update values
-//       //Move
-//       par_sys[loop].ypos += par_sys[loop].vel / (slowdown*1000);
-//       par_sys[loop].vel += par_sys[loop].gravity;
-//       // Decay
-//       par_sys[loop].life -= par_sys[loop].fade;
-
-//       if (par_sys[loop].ypos <= -10) {
-//         int zi = z - zoom + 10;
-//         int xi = x + 10;
-//         ground_colors[zi][xi][0] = 1.0;
-//         ground_colors[zi][xi][2] = 1.0;
-//         ground_colors[zi][xi][3] += 1.0;
-//         if (ground_colors[zi][xi][3] > 1.0) {
-//           ground_points[xi][zi][1] += 0.1;
-//         }
-//         par_sys[loop].life = -1.0;
-//       }
-
-//       //Revive
-//       if (par_sys[loop].life < 0.0) {
-//         initParticles(loop);
-//       }
-//     }
-//   }
-// }
-
-// // Draw Particles
-// void drawScene( ) {
-//   int i, j;
-//   float x, y, z;
-
-//   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-//   glMatrixMode(GL_MODELVIEW);
-
-//   glLoadIdentity();
+    // Swap buffers
+    drawBuf = 1 - drawBuf;
+}
 
 
-//   glRotatef(pan, 0.0, 1.0, 0.0);
-//   glRotatef(tilt, 1.0, 0.0, 0.0);
-
-//   // GROUND?!
-//   glColor3f(r, g, b);
-//   glBegin(GL_QUADS);
-//     // along z - y const
-//     for (i = -10; i+1 < 11; i++) {
-//       // along x - y const
-//       for (j = -10; j+1 < 11; j++) {
-//         glColor3fv(ground_colors[i+10][j+10]);
-//         glVertex3f(ground_points[j+10][i+10][0],
-//               ground_points[j+10][i+10][1],
-//               ground_points[j+10][i+10][2] + zoom);
-//         glColor3fv(ground_colors[i+10][j+1+10]);
-//         glVertex3f(ground_points[j+1+10][i+10][0],
-//               ground_points[j+1+10][i+10][1],
-//               ground_points[j+1+10][i+10][2] + zoom);
-//         glColor3fv(ground_colors[i+1+10][j+1+10]);
-//         glVertex3f(ground_points[j+1+10][i+1+10][0],
-//               ground_points[j+1+10][i+1+10][1],
-//               ground_points[j+1+10][i+1+10][2] + zoom);
-//         glColor3fv(ground_colors[i+1+10][j+10]);
-//         glVertex3f(ground_points[j+10][i+1+10][0],
-//               ground_points[j+10][i+1+10][1],
-//               ground_points[j+10][i+1+10][2] + zoom);
-//       }
-
-//     }
-//   glEnd();
-//   // Which Particles
-//   if (fall == RAIN) {
-//     drawRain();
-//   }else if (fall == HAIL) {
-//     drawHail();
-//   }else if (fall == SNOW) {
-//     drawSnow();
-//   }
-
-// }
-
-// void reshape(int w, int h) {
-//     if (h == 0) h = 1;
-
-//     glViewport(0, 0, w, h);
-//     glMatrixMode(GL_PROJECTION);
-//     glLoadIdentity();
-
-//     //gluPerspective(45, (float) w / (float) h, .1, 200);
-
-//     glMatrixMode(GL_MODELVIEW);
-//     glLoadIdentity();
-// }

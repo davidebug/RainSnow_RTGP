@@ -1,4 +1,4 @@
-#version 400
+#version 410
 uniform sampler2D ParticleTex;
 in float Transp;
 layout ( location = 0 ) out vec4 FragColor;
