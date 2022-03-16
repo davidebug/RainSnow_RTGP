@@ -75,6 +75,7 @@ positive Z axis points "outside" the screen
 #include <utils/shader_v1.h>
 #include <utils/model_v1.h>
 #include <utils/camera.h>
+#include <utils/glslprogram.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
