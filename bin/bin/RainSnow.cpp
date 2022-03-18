@@ -75,7 +75,7 @@ positive Z axis points "outside" the screen
 #include <utils/shader_v1.h>
 #include <utils/model_v1.h>
 #include <utils/camera.h>
-#include <glslprogram.h>
+#include <utils/glslprogram.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -222,6 +222,7 @@ glm::mat4 model, projection;
 /////////////////// MAIN function ///////////////////////
 int main()
 {
+    
     // Initialization of OpenGL context using GLFW
     glfwInit();
     // We set OpenGL specifications required for this application
@@ -339,17 +340,17 @@ int main()
     // outside the area covered by the light frustum, everything is rendered in shadow (because we set GL_CLAMP_TO_BORDER)
     // thus, we set the texture border to white, so to render correctly everything not involved by the shadow map
     //*************
-    // GLfloat borderColor[] = { 1.0f, 1.0f, 1.0f, 1.0f };
-    // glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
+    GLfloat borderColor[] = { 1.0f, 1.0f, 1.0f, 1.0f };
+    glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
 
-    // // we bind the depth map FBO
-    // glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
-    // glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depthMap, 0);
-    // // we set that we are not calculating nor saving color data
-    // glDrawBuffer(GL_NONE);
-    // glReadBuffer(GL_NONE);
-    // glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    // ///////////////////////////////////////////////////////////////////
+    // we bind the depth map FBO
+    glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depthMap, 0);
+    // we set that we are not calculating nor saving color data
+    glDrawBuffer(GL_NONE);
+    glReadBuffer(GL_NONE);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    ///////////////////////////////////////////////////////////////////
 
 
     // Projection matrix of the camera: FOV angle, aspect ratio, near and far planes
