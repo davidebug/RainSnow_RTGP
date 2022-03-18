@@ -1,7 +1,7 @@
 #include "glslprogram.h"
 
 #include "glutils.h"
-
+#include <iostream>
 #include <fstream>
 
 using std::ifstream;
@@ -175,6 +175,7 @@ void GLSLProgram::link() {
 
     int status = 0;
     glGetProgramiv(handle, GL_LINK_STATUS, &status);
+   
     if (GL_FALSE == status) {
         // Store log and return false
         int length = 0;
@@ -192,7 +193,11 @@ void GLSLProgram::link() {
 
         throw GLSLProgramException(string("Program link failed:\n") + logString);
     } else {
+        std::cout << 
+        "FINDING UNIFORMS" << std::endl;
         findUniformLocations();
+         std::cout << 
+        "LINKED" << std::endl;
         linked = true;
     }
 }
@@ -200,7 +205,7 @@ void GLSLProgram::link() {
 void GLSLProgram::findUniformLocations() {
     uniformLocations.clear();
 
-    GLint numUniforms = 0;
+    GLint numUniforms = 4;
 #ifdef __APPLE__
     // For OpenGL 4.1, use glGetActiveUniform
     GLint maxLen;
@@ -221,21 +226,35 @@ void GLSLProgram::findUniformLocations() {
     delete[] name;
 #else
     // For OpenGL 4.3 and above, use glGetProgramResource
-    glGetProgramInterfaceiv( handle, GL_UNIFORM, GL_ACTIVE_RESOURCES, &numUniforms);
+    // std::cout << 
+    //     handle << std::endl;
+    // glGetProgramResourceiv( handle, GL_UNIFORM, GL_ACTIVE_RESOURCES, &numUniforms);
 
     GLenum properties[] = {GL_NAME_LENGTH, GL_TYPE, GL_LOCATION, GL_BLOCK_INDEX};
-
-    for( GLint i = 0; i < numUniforms; ++i ) {
-      GLint results[4];
-      glGetProgramResourceiv(handle, GL_UNIFORM, i, 4, properties, 4, NULL, results);
-
-      if( results[3] != -1 ) continue;  // Skip uniforms in blocks
-      GLint nameBufSize = results[0] + 1;
-      char * name = new char[nameBufSize];
-      glGetProgramResourceName(handle, GL_UNIFORM, i, nameBufSize, NULL, name);
-      uniformLocations[name] = results[2];
-      delete [] name;
-    }
+   std::cout << 
+        "Getting properties" << std::endl;
+//     for( GLint i = 0; i < numUniforms; ++i ) {
+//       GLint results[4];
+//       glGetProgramResourceiv(handle, GL_UNIFORM, i, 4, properties, 4, NULL, results);
+// std::cout << 
+//         "Getting properties" << std::endl;
+//       if( results[3] != -1 ) continue;  // Skip uniforms in blocks
+//       GLint nameBufSize = results[0] + 1;
+//       char * name = new char[nameBufSize];
+//       glGetProgramResourceName(handle, GL_UNIFORM, i, nameBufSize, NULL, name);
+//       uniformLocations[name] = results[2];
+//       delete [] name;
+//        std::cout << 
+//         "Dones" << std::endl;
+//     }
+        uniformLocations["Time"] = 0;
+        uniformLocations["H"] = 1;
+        uniformLocations["Accel"] = 2;
+        uniformLocations["ParticleLifetime"] = 4;
+        uniformLocations["MVP"] = 3;
+        uniformLocations["ParticleTex"] = 5;
+               std::cout << 
+        "Dones" << std::endl;
 #endif
 }
 
@@ -246,6 +265,7 @@ void GLSLProgram::use() {
 }
 
 int GLSLProgram::getHandle() {
+    
     return handle;
 }
 

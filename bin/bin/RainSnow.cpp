@@ -246,7 +246,7 @@ int main()
         return -1;
     }
     glfwMakeContextCurrent(window);
-
+    cout << "-----init window----"<< endl;
     // we put in relation the window and the callbacks
     glfwSetKeyCallback(window, key_callback);
     glfwSetCursorPosCallback(window, mouse_callback);
@@ -271,8 +271,11 @@ int main()
 
     //the "clear" color for the frame buffer
     glClearColor(0.26f, 0.46f, 0.98f, 1.0f);
-
+    cout << "-----compiling shader----"<< endl;
     CompileAndLinkShader();
+
+
+    cout << "-----shader compiled----"<< endl;
     GLuint programHandle = prog.getHandle();
     renderSub = glGetSubroutineIndex(programHandle, GL_VERTEX_SHADER, "render");
     updateSub = glGetSubroutineIndex(programHandle, GL_VERTEX_SHADER, "update");
@@ -283,7 +286,7 @@ int main()
     model = glm::mat4(1.0f);
 
     initBuffers();
-
+    cout << "-----buffers initiated----"<< endl;
 
 
     // we create the Shader Program used for objects (which presents different subroutines we can switch)
@@ -295,7 +298,7 @@ int main()
     SetupShader(illumination_shader.Program, false);
     // we print on console the name of the first subroutine used
     PrintCurrentShader(current_subroutine);
-
+cout << "-----loading textures----"<< endl;
     // we load the images and store them in a vector
     textureID.push_back(LoadTexture("../../textures/UV_Grid_Sm.png"));
     textureID.push_back(LoadTexture("../../textures/SoilCracked.png"));
@@ -303,7 +306,7 @@ int main()
     textureID.push_back(LoadTexture("../../textures/bluewater.png"));
     // textureID.push_back(LoadTexture("../../textures/DB2X2_L01_Nor.png"));
     // textureID.push_back(LoadTexture("../../textures/DB2X2_L01.png"));
-
+cout << "-----texture loaded----"<< endl;
     prog.setUniform("ParticleTex", 0);
     prog.setUniform("ParticleLifetime", 3.5f);
     prog.setUniform("Accel", glm::vec3(0.0f,-0.4f,0.0f));
@@ -313,7 +316,7 @@ int main()
     Model lampModel("../../models/Lamp.obj");
     Model treeModel("../../models/Tree.obj");
     Model planeModel("../../models/plane.obj");
-
+    cout << "-----models loaded----"<< endl;
 
 
     /////////////////// CREATION OF BUFFER FOR THE  DEPTH MAP /////////////////////////////////////////
@@ -357,6 +360,8 @@ int main()
     projection = glm::perspective(45.0f, (float)screenWidth/(float)screenHeight, 0.1f, 10000.0f);
     
     int drawBuf = 0;
+
+    cout << "starting loop ------------"<< endl;
     // Rendering loop: this code is executed at each frame
     while(!glfwWindowShouldClose(window))
     {
@@ -674,16 +679,21 @@ void CompileAndLinkShader() {
     try {
 		prog.compileShader("Shader/particles_shader.vert");
 		prog.compileShader("Shader/particles_shader.frag");
-
+cout << 
+        "1 Shaders loaded" << endl;
 	    //////////////////////////////////////////////////////
 		// Setup the transform feedback
 		GLuint progHandle = prog.getHandle();
 		const char * outputNames[] = { "Position", "Velocity", "StartTime" };
 		glTransformFeedbackVaryings(progHandle, 3, outputNames, GL_SEPARATE_ATTRIBS);
 		///////////////////////////////////////////////////////
-
+cout << 
+        "2 Transform feedback set" << endl;
     	prog.link();
+        cout << "3 Shader linked" << endl;
     	prog.use();
+        cout << 
+        "4 Shader selected" << endl;
     } catch(GLSLProgramException &e ) {
     	cerr << 
         "Error" << endl;
@@ -916,7 +926,7 @@ void initBuffers()
 
     GLint value;
     glGetIntegerv(GL_MAX_TRANSFORM_FEEDBACK_BUFFERS, &value);
-    printf("MAX_TRANSFORM_FEEDBACK_BUFFERS = %d\n", value);
+    
 }
 
 void renderParticles() {
