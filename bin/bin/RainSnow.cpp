@@ -75,7 +75,7 @@ positive Z axis points "outside" the screen
 #include <utils/shader_v1.h>
 #include <utils/model_v1.h>
 #include <utils/camera.h>
-#include <utils/glslprogram.h>
+#include <glslprogram.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -137,6 +137,9 @@ vector<std::string> shaders;
 
 // the name of the subroutines are searched in the shaders, and placed in the shaders vector (to allow shaders swapping)
 void SetupShader(int shader_program, bool isParticleShader);
+
+void CompileAndLinkShader();
+    
 
 // print on console the name of current shader subroutine
 void PrintCurrentShader(int subroutine);
@@ -207,10 +210,15 @@ GLuint particleArray[2];
 GLuint feedback[2], initVel, startTime[2];
 GLuint drawBuf, query;
 
+GLSLProgram prog;
+GLuint renderSub, updateSub;
+
 int nParticles;
 
 float angle;
-float time, deltaT;
+
+glm::mat4 model, projection;
+
 /////////////////// MAIN function ///////////////////////
 int main()
 {
@@ -255,6 +263,7 @@ int main()
     // we define the viewport dimensions
     int width, height;
     glfwGetFramebufferSize(window, &width, &height);
+    
 
     // we enable Z test
     glEnable(GL_DEPTH_TEST);
@@ -262,18 +271,27 @@ int main()
     //the "clear" color for the frame buffer
     glClearColor(0.26f, 0.46f, 0.98f, 1.0f);
 
+    CompileAndLinkShader();
+    GLuint programHandle = prog.getHandle();
+    renderSub = glGetSubroutineIndex(programHandle, GL_VERTEX_SHADER, "render");
+    updateSub = glGetSubroutineIndex(programHandle, GL_VERTEX_SHADER, "update");
+    glPointSize(10.0f);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    model = glm::mat4(1.0f);
+
     initBuffers();
+
+
 
     // we create the Shader Program used for objects (which presents different subroutines we can switch)
     Shader illumination_shader = Shader("21_ggx_tex_shadow.vert", "22_ggx_tex_shadow.frag");
 
-    Shader particle_shader = Shader("Shader/particles_shader.vert", "Shader/particles_shader.frag");
-    particle_shader.enableParticles();
 
     // we parse the Shader Program to search for the number and names of the subroutines.
     // the names are placed in the shaders vector
     SetupShader(illumination_shader.Program, false);
-    SetupShader(particle_shader.Program, true);
     // we print on console the name of the first subroutine used
     PrintCurrentShader(current_subroutine);
 
@@ -281,14 +299,21 @@ int main()
     textureID.push_back(LoadTexture("../../textures/UV_Grid_Sm.png"));
     textureID.push_back(LoadTexture("../../textures/SoilCracked.png"));
     textureID.push_back(LoadTexture("../../textures/bark_0021.jpg"));
+    textureID.push_back(LoadTexture("../../textures/bluewater.png"));
     // textureID.push_back(LoadTexture("../../textures/DB2X2_L01_Nor.png"));
     // textureID.push_back(LoadTexture("../../textures/DB2X2_L01.png"));
+
+    prog.setUniform("ParticleTex", 0);
+    prog.setUniform("ParticleLifetime", 3.5f);
+    prog.setUniform("Accel", glm::vec3(0.0f,-0.4f,0.0f));
 
     // we load the model(s) (code of Model class is in include/utils/model_v2.h)
     Model benchModel("../../models/bench.obj");
     Model lampModel("../../models/Lamp.obj");
     Model treeModel("../../models/Tree.obj");
     Model planeModel("../../models/plane.obj");
+
+
 
     /////////////////// CREATION OF BUFFER FOR THE  DEPTH MAP /////////////////////////////////////////
     // buffer dimension: too large -> performance may slow down if we have many lights; too small -> strong aliasing
@@ -308,24 +333,27 @@ int main()
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
 
+
+
+
     // outside the area covered by the light frustum, everything is rendered in shadow (because we set GL_CLAMP_TO_BORDER)
     // thus, we set the texture border to white, so to render correctly everything not involved by the shadow map
     //*************
-    GLfloat borderColor[] = { 1.0f, 1.0f, 1.0f, 1.0f };
-    glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
+    // GLfloat borderColor[] = { 1.0f, 1.0f, 1.0f, 1.0f };
+    // glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
 
-    // we bind the depth map FBO
-    glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depthMap, 0);
-    // we set that we are not calculating nor saving color data
-    glDrawBuffer(GL_NONE);
-    glReadBuffer(GL_NONE);
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    ///////////////////////////////////////////////////////////////////
+    // // we bind the depth map FBO
+    // glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
+    // glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depthMap, 0);
+    // // we set that we are not calculating nor saving color data
+    // glDrawBuffer(GL_NONE);
+    // glReadBuffer(GL_NONE);
+    // glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    // ///////////////////////////////////////////////////////////////////
 
 
     // Projection matrix of the camera: FOV angle, aspect ratio, near and far planes
-    glm::mat4 projection = glm::perspective(45.0f, (float)screenWidth/(float)screenHeight, 0.1f, 10000.0f);
+    projection = glm::perspective(45.0f, (float)screenWidth/(float)screenHeight, 0.1f, 10000.0f);
     
     int drawBuf = 0;
     // Rendering loop: this code is executed at each frame
@@ -404,22 +432,6 @@ int main()
         // Swapping back and front buffers
         glfwSwapBuffers(window);
 
-            // --- PARTICLE SHADER --- //
-        
-        particle_shader.Use();
-
-        renderParticles(particle_shader);
-
-        // glClear( GL_COLOR_BUFFER_BIT );
-        //         // Un-bind the feedback object.
-        // glBindTransformFeedback(GL_TRANSFORM_FEEDBACK, 0);
-        // // Draw the sprites from the feedback buffer
-        // glBindVertexArray(particleArray[drawBuf]);
-        // glDrawArrays(GL_POINTS, 0, 100);
-
-        //         // we render the scene
-        // RenderObjects(particle_shader, planeModel, benchModel, lampModel, treeModel, RENDER, depthMap);
-
 
 
     }
@@ -427,7 +439,6 @@ int main()
     // when I exit from the graphics loop, it is because the application is closing
     // we delete the Shader Programs
     illumination_shader.Delete();
-    particle_shader.Delete();
     // chiudo e cancello il contesto creato
     glfwTerminate();
     return 0;
@@ -538,6 +549,8 @@ void RenderObjects(Shader &shader, Model &planeModel, Model &benchModel, Model &
     
     // we render the tree
     treeModel.Draw();
+
+    renderParticles();
 
 }
 
@@ -656,6 +669,26 @@ void SetupShader(int program, bool isParticleShader)
     }
 }
 
+void CompileAndLinkShader() {
+    try {
+		prog.compileShader("Shader/particles_shader.vert");
+		prog.compileShader("Shader/particles_shader.frag");
+
+	    //////////////////////////////////////////////////////
+		// Setup the transform feedback
+		GLuint progHandle = prog.getHandle();
+		const char * outputNames[] = { "Position", "Velocity", "StartTime" };
+		glTransformFeedbackVaryings(progHandle, 3, outputNames, GL_SEPARATE_ATTRIBS);
+		///////////////////////////////////////////////////////
+
+    	prog.link();
+    	prog.use();
+    } catch(GLSLProgramException &e ) {
+    	cerr << 
+        "Error" << endl;
+ 		exit( EXIT_FAILURE );
+    }
+}
 /////////////////////////////////////////
 // we print on console the name of the currently used shader subroutine
 void PrintCurrentShader(int subroutine)
@@ -749,41 +782,6 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos)
 }
 
 //---------------------------------------------------------------------------
-
-
-void normal_keys(unsigned char key, int x, int y) {
-  if (key == 'r') { // Rain
-    fall = RAIN;
-   // glutPostRedisplay();
-  }
-  if (key == 'h') { // Hail
-    fall = HAIL;
-   // glutPostRedisplay();
-  }
-  if (key == 's') { // Snow
-    fall = SNOW;
-   // glutPostRedisplay();
-  }
-  if (key == '=') { //really '+' - make hail bigger
-    hailsize += 0.01;
-  }
-  if (key == '-') { // make hail smaller
-    if (hailsize > 0.1) hailsize -= 0.01;
-  }
-  if (key == ',') { // really '<' slow down
-    if (slowdown > 4.0) slowdown += 0.01;
-  }
-  if (key == '.') { // really '>' speed up
-    if (slowdown > 1.0) slowdown -= 0.01;
-  }
-  if (key == 'q') { // QUIT
-    exit(0);
-  }
-}
-
-void special_keys(int key, int x, int y) {
-
-}
 
 void initBuffers()
 {
@@ -920,33 +918,15 @@ void initBuffers()
     printf("MAX_TRANSFORM_FEEDBACK_BUFFERS = %d\n", value);
 }
 
-void renderParticles(Shader& particle_shader)
-{
+void renderParticles() {
+            
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, textureID[3]);
+    // Update pass
+    glUniformSubroutinesuiv(GL_VERTEX_SHADER, 1, &updateSub);
 
-     GLuint updateIndex = glGetSubroutineIndex( particle_shader.Program,
-    GL_VERTEX_SHADER,"update" );
-
-    glUniformSubroutinesuiv(GL_VERTEX_SHADER, 1, &updateIndex);
-
-    GLint texture = LoadTexture("../../textures/SoilCracked.png");
-    float timeValue = 50.0f;
-    float hValue = 0.0f;
-    float lifetime = 2.0f;
-    glm::vec3 accelValue = glm::vec3(0.0f, 1.0f, 0.0f); 
-
-    // we determine the position in the Shader Program of the uniform variables
-    GLint ParticleTex = glGetUniformLocation(particle_shader.Program, "ParticleTex");
-    GLint Time = glGetUniformLocation(particle_shader.Program, "Time");
-    GLint H = glGetUniformLocation(particle_shader.Program, "H");
-    GLint accel = glGetUniformLocation(particle_shader.Program, "Accel");
-    GLint ParticleLifetime = glGetUniformLocation(particle_shader.Program, "ParticleLifetime");
-
-    // we assign the value to the uniform variables
-    glUniform1i(ParticleTex, texture);
-    glUniform1f(Time, timeValue);
-    glUniform1f(H, hValue);
-    glUniform3fv(accel, 1, glm::value_ptr(accelValue));
-    glUniform1f(ParticleLifetime, lifetime);
+    prog.setUniform("Time", lastFrame);
+    prog.setUniform("H", deltaTime);
 
     glEnable(GL_RASTERIZER_DISCARD);
 
@@ -960,20 +940,11 @@ void renderParticles(Shader& particle_shader)
     glDisable(GL_RASTERIZER_DISCARD);
 
     // Render pass
-     GLuint renderIndex = glGetSubroutineIndex( particle_shader.Program,
-GL_VERTEX_SHADER,"render" );
-        glUniformSubroutinesuiv(GL_VERTEX_SHADER, 1, &renderIndex);   
-
-        glClear( GL_COLOR_BUFFER_BIT );
-                // Un-bind the feedback object.
-        glBindTransformFeedback(GL_TRANSFORM_FEEDBACK, 0);
-        // Draw the sprites from the feedback buffer
-        glBindVertexArray(particleArray[drawBuf]);
-        glDrawArrays(GL_POINTS, 0, 100);
+    glUniformSubroutinesuiv(GL_VERTEX_SHADER, 1, &renderSub);
+    glClear( GL_COLOR_BUFFER_BIT );
     view = glm::lookAt(glm::vec3(3.0f * cos(angle),1.5f,3.0f * sin(angle)), glm::vec3(0.0f,1.5f,0.0f), glm::vec3(0.0f,1.0f,0.0f));
-    
-    
-   // setMatrices();
+    glm::mat4 mv = view * model;
+    prog.setUniform("MVP", projection * mv);
 
     glBindVertexArray(particleArray[drawBuf]);
     glDrawTransformFeedback(GL_POINTS, feedback[drawBuf]);
